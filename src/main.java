@@ -1,12 +1,10 @@
-import java.io.FileNotFoundException;
+import java.io.*;
+import java.nio.file.Files;
 
-public class main
-{
-    public static void main(String[] args)
-    {
-        String s = "C:\\Users\\owner\\Desktop\\דחיסה\\gzip\\exmp.txt";
+public class main {
+    public static void main(String[] args) {
+        String s = "C:\\Users\\eyald\\Desktop\\LZ77.txt";
         Lz77EncoderDecoder l = new Lz77EncoderDecoder();
         l.CompressLz(s);
-
     }
 }

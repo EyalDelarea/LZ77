@@ -1,65 +1,80 @@
-import java.io.BufferedReader;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.IOException;
+import java.io.*;
+import java.nio.file.Files;
 import java.util.ArrayList;
 
 
 public class Lz77EncoderDecoder {
 
+    ArrayList<DictionaryItem> dictionary = new ArrayList<>();
     public final int windowSize = 16;
     public final int searchBufferSize = 8;
-    ArrayList<DictionaryItem> dictionary = new ArrayList<>();
+    static int filePointer = 0;
+    static byte[] bytesArray;
 
     public void CompressLz(String input_path) {
 
-        BufferedReader buffer = null;
+        //read all bytes from file
+        File sa = new File(input_path);
         try {
-            buffer = new BufferedReader(new FileReader(input_path));
-        } catch (FileNotFoundException e) {
+            bytesArray = Files.readAllBytes(sa.toPath());
+        } catch (IOException e) {
             e.printStackTrace();
         }
+
         Byte[] window = new Byte[windowSize];
 
-        initWindow(window, buffer);
+        initWindow(window);
         /**
          * look ahead buffer condition !=null
          */
-        while (window[searchBufferSize] != null) {
-            //for (int i = searchBufferSize - 1; i >= 0; i--)
-            int i = searchBufferSize - 1;
-            do {
-                DictionaryItem currentBestMatch = new DictionaryItem();
-                findBestMatch(window, buffer, searchBufferSize - 1, currentBestMatch);
-            }
-            while (window[i] != null);
-
+        do {
+            DictionaryItem currentBestMatch = new DictionaryItem();
+            findBestMatch(window, searchBufferSize - 1, currentBestMatch);
         }
+        //meaning index 8 is -1
+        while (window[searchBufferSize] != -1);
+
     }
 
     /**
      * @param window function to find the best match for the current window values
      *               using dynamic programming logic
      */
-    private void findBestMatch(Byte[] window, BufferedReader buffer, int index, DictionaryItem currentBestMatch) {
-        if (window[searchBufferSize].equals(window[index])) {
+    private void findBestMatch(Byte[] window, int index, DictionaryItem currentBestMatch) {
 
-            int length = findCurrentMatchLength(window, window[index], index);
-            DictionaryItem item = new DictionaryItem(window[searchBufferSize + length].byteValue(), Math.abs(searchBufferSize - index), length);
+        if (index < 0) {
+            //TODO better exit
+            dictionary.add(currentBestMatch);
+            pushNewWindowInput(window,currentBestMatch);
+            return;
+        }
+        //if byte value is equal
+        if (window[searchBufferSize].equals(window[index])) {
+            int length = findCurrentMatchLength(window, index);
+            DictionaryItem currentMatch = new DictionaryItem(window[searchBufferSize + length].byteValue(), Math.abs(searchBufferSize - index), length);
+            //keep searching for other matches
             index--;
-            currentBestMatch = findMaxLengthInMinDist(currentBestMatch, item);
-            findBestMatch(window, buffer, index, currentBestMatch);
+            currentBestMatch = findMaxLengthInMinDist(currentBestMatch, currentMatch);
+            findBestMatch(window, index, currentBestMatch);
+
+            //if index is null
         } else if (window[index] == null) {
+            //we discovered new char
             if (currentBestMatch.getmatchDistance() == -1) {
                 DictionaryItem item = new DictionaryItem(window[searchBufferSize].byteValue(), 0, 0);
                 dictionary.add(item);
-            } else
+            } else {
+                //add the match we found earlier
                 dictionary.add(currentBestMatch);
-            pushNewWindowInput(window, buffer, currentBestMatch);
+            }
+            pushNewWindowInput(window, currentBestMatch);
             return;
+
+            //no match found reducing index to keep search for match
+            //in search buffer
         } else {
             index--;
-            findBestMatch(window, buffer, index, currentBestMatch);
+            findBestMatch(window, index, currentBestMatch);
         }
 
     }
@@ -84,71 +99,72 @@ public class Lz77EncoderDecoder {
 
     /**
      * @param window the current window we will look on
-     * @param aByte  the current byte we check
      * @param index  the byte index for the current match
      * @return the matches byte sequence
      */
-    private int findCurrentMatchLength(Byte[] window, Byte aByte, int index) {
-        int length = 1;
-        for (int i = searchBufferSize + 1; i < window.length; i++) {
-            for (int j = index + 1; j < window.length; j++) {
-                if (window[i].equals(window[j])) {
-                    length++;
-                } else
-                    return length;
-            }
+    private int findCurrentMatchLength(Byte[] window, int index) {
+        int searchBufferIndex = searchBufferSize + 1;
+        int counter = 1;
+        int temp = 0;
+        index++;
+        //advance two pointer until there's no match between the chars
+        while ((window[searchBufferIndex + temp].equals(window[index + temp]))
+                && (searchBufferSize + temp < window.length)) {
+            counter++;
+            temp++;
         }
-        return length;
+        return counter;
     }
 
-    private void initWindow(Byte[] window, BufferedReader buffer) {
-        for (int i = 0; i < searchBufferSize; i++) {
-            window[i] = null;
-        }
+
+    private void initWindow(Byte[] window) {
         for (int i = searchBufferSize; i < window.length; i++) {
-            try {
-                window[i] = Byte.valueOf((byte) buffer.read());
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            window[i] = bytesArray[filePointer];
+            filePointer++;
         }
     }
+
 
     /**
-     *
      * @param window bytes window
-     * @param buffer input buffer
-     * @param item coded item to jump the amount of the length.
-     *
+     * @param item   coded item to jump the amount of the length.
      */
-    private void pushNewWindowInput(Byte[] window, BufferedReader buffer, DictionaryItem item) {
-        int firstIndex = searchBufferSize;
-        Byte temp = window[window.length-1];
+    private void pushNewWindowInput(Byte[] window, DictionaryItem item) {
 
-        /**
-         finding the first not null element in window
-         */
+        int firstIndex = searchBufferSize;
+        int amountOfJumps = item.getLength() + 1;
+
+        // finding the first not null element in window
         for (int i = 0; i < window.length; i++) {
             if (window[i] != null) {
                 firstIndex = i;
                 break;
             }
         }
-
-        for (int i = window.length-1; i >= firstIndex - (item.getLength() + 1); i--) {
-            if (i > 0) {
-                //
-                Byte temp2 =window[i-1];
-                //push
-                window[i - 1] = temp;
-                temp = temp2;
+        for (int jumps = 0; jumps < amountOfJumps; jumps++) {
+            Byte temp = window[window.length - 1];
+            if (firstIndex >= 0) {
+                for (int i = window.length - 1; i >= firstIndex; i--) {
+                    if (i > 0) {
+                        Byte temp2 = window[i - 1];
+                        window[i - 1] = temp;
+                        temp = temp2;
+                    }
+                }
+                if (filePointer >= bytesArray.length) {
+                    //read all file already,push -1
+                    window[window.length - 1] = -1;
+                } else {
+                    //push next char to windwo
+                    window[window.length - 1] = bytesArray[filePointer];
+                    filePointer++;
+                }
             }
-        }
-        //read a new byte from the bufferReader
-        try {
-            window[window.length - 1] = Byte.valueOf((byte) buffer.read());
-        } catch (IOException e) {
-            e.printStackTrace();
+            if (firstIndex <= 0) {
+                firstIndex = 0;
+            } else {
+                firstIndex--;
+            }
         }
     }
 

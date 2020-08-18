@@ -6,7 +6,7 @@ public class DictionaryItem {
 
     public DictionaryItem() {
         this.matchDistance=-1;
-        this.length=-1;
+        this.length=0;
     }
 
     public DictionaryItem(byte value, int matchDistance, int length) {
