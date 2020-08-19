@@ -37,7 +37,7 @@ public class Lz77EncoderDecoder {
         while (window[searchBufferSize] != -1);
 
 
-        System.out.println();
+        printDic(dictionary);
 
     }
 
@@ -55,11 +55,15 @@ public class Lz77EncoderDecoder {
 
             if (min || max) { //basic object
                 basicDictionaryItem basic = new basicDictionaryItem(currentBestMatch.getValue());
+                dictionary.add(basic);
+                //TODO push basic
+             //   pushNewWindowInput(window, basic);
             } else { //not basic
                 dictionary.add(currentBestMatch);
+                pushNewWindowInput(window, currentBestMatch);
             }
 
-            pushNewWindowInput(window, currentBestMatch);
+
             return;
         }
         //if byte value is equal
@@ -82,7 +86,7 @@ public class Lz77EncoderDecoder {
                 //but check if it hold the conditions
                 if (currentBestMatch.getLength() < MIN_MATCH_LENGTH ||
                         currentBestMatch.getLength() > MAX_MATCH_LENGTH) {
-                    basicDictionaryItem basicCurrentMatch = new basicDictionaryItem(window[searchBufferSize + currentBestMatch.getLength()]);
+                    basicDictionaryItem basicCurrentMatch = new basicDictionaryItem(window[searchBufferSize]);
                     dictionary.add(basicCurrentMatch);
                 } else {
                     dictionary.add(currentBestMatch);
@@ -138,7 +142,7 @@ public class Lz77EncoderDecoder {
         //crash fix for length bigger then window size /2
         if (counter >= (windowSize - searchBufferIndex))
             return windowSize - searchBufferIndex - 1;
-        System.out.println();
+
         return counter;
     }
 
@@ -160,9 +164,12 @@ public class Lz77EncoderDecoder {
      * @param item   coded item to jump the amount of the length.
      */
     private void pushNewWindowInput(Byte[] window, DictionaryItem item) {
-
+//TODO fix basic window push
+        int length = item.getLength();
+        boolean min = length < MIN_MATCH_LENGTH;
+        boolean max = length > MAX_MATCH_LENGTH;
         int firstIndex = searchBufferSize;
-        int amountOfJumps = item.getLength() + 1;
+        int amountOfJumps;
 
         // finding the first not null element in window
         for (int i = 0; i < window.length; i++) {
@@ -171,37 +178,36 @@ public class Lz77EncoderDecoder {
                 break;
             }
         }
+
+        if (min || max) {
+            amountOfJumps = 1;
+        }else{
+            amountOfJumps = item.getLength() + 1;
+        }
+
         //loop how many jumps
         for (int jumps = 0; jumps < amountOfJumps; jumps++) {
-            Byte temp = window[window.length - 1];
-            if (firstIndex >= 0) {
-                for (int i = window.length - 1; i >= firstIndex; i--) {
-                    if (i > 0) {
-                        Byte temp2 = window[i - 1];
-                        window[i - 1] = temp;
-                        temp = temp2;
-                    }
-                }
-                if (filePointer >= bytesArray.length) {
-                    //read all file already,push -1
-                    window[window.length - 1] = -1;
-                } else {
-                    //push next char to windwo
-                    window[window.length - 1] = bytesArray[filePointer];
-                    filePointer++;
-                }
-            }
-            if (firstIndex <= 0) {
-                firstIndex = 0;
-            } else {
-                firstIndex--;
-            }
+
         }
     }
+
 
     public void deCompress(ArrayList<DictionaryItem> dictionary) {
         while (!dictionary.isEmpty()) {
             System.out.println(dictionary.get(0));
+        }
+    }
+
+    public static void printDic(ArrayList<basicDictionaryItem> dictionary) {
+        //print dictionary
+        for (int i = 0; i < dictionary.size(); i++) {
+            if (dictionary.get(i) instanceof DictionaryItem) {
+                System.out.print("<" + (char) (dictionary.get(i).getValue()) +
+                        "" + "," + ((DictionaryItem) dictionary.get(i)).getLength() + ","
+                        + ((DictionaryItem) dictionary.get(i)).getmatchDistance() + ">");
+            } else {
+                System.out.print((char) (dictionary.get(i).getValue()));
+            }
         }
     }
 }
