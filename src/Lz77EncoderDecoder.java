@@ -9,7 +9,7 @@ public class Lz77EncoderDecoder {
     private static final int MAX_MATCH_LENGTH = 258;
     ArrayList<basicDictionaryItem> dictionary = new ArrayList<>();
     public final int windowSize = 16;
-    public final int searchBufferSize = 12;
+    public final int searchBufferSize = 8;
     static int filePointer = 0;
     static byte[] bytesArray;
 
@@ -48,38 +48,46 @@ public class Lz77EncoderDecoder {
     private void findBestMatch(Byte[] window, int index, DictionaryItem currentBestMatch) {
 
         if (index < 0) {
-            if (currentBestMatch.getmatchDistance() != -1) {
+            int length = currentBestMatch.getLength();
+            boolean min = length < MIN_MATCH_LENGTH;
+            boolean max = length > MAX_MATCH_LENGTH;
+
+
+            if (min || max) { //basic object
+                basicDictionaryItem basic = new basicDictionaryItem(currentBestMatch.getValue());
+            } else { //not basic
                 dictionary.add(currentBestMatch);
             }
+
             pushNewWindowInput(window, currentBestMatch);
             return;
         }
         //if byte value is equal
         if (window[searchBufferSize].equals(window[index])) {
             int length = findCurrentMatchLength(window, index);
+            DictionaryItem currentMatch = new DictionaryItem(window[searchBufferSize + length], Math.abs(searchBufferSize - index), length);
+            //keep searching for other matches
+            index--;
+            currentBestMatch = findMaxLengthInMinDist(currentBestMatch, currentMatch);
+            findBestMatch(window, index, currentBestMatch);
 
-            if ((length < MIN_MATCH_LENGTH || length > MAX_MATCH_LENGTH) && (length==0)) {
-                basicDictionaryItem basicCurrentMatch = new basicDictionaryItem(window[searchBufferSize + length]);
-                dictionary.add(basicCurrentMatch);
-                return;
-            } else {
-                DictionaryItem currentMatch = new DictionaryItem(window[searchBufferSize + length], Math.abs(searchBufferSize - index), length);
-                //keep searching for other matches
-                index--;
-                currentBestMatch = findMaxLengthInMinDist(currentBestMatch, currentMatch);
-                findBestMatch(window, index, currentBestMatch);
-            }
-
-
-            //if index is null
+            //if index value is null
         } else if (window[index] == null) {
-            //we discovered new char
-            if (currentBestMatch.getmatchDistance() == -1) {
+
+            if (currentBestMatch.getmatchDistance() == -1) { //we discovered new char
                 basicDictionaryItem basicCurrentMatch = new basicDictionaryItem(window[searchBufferSize + currentBestMatch.getLength()]);
                 dictionary.add(basicCurrentMatch);
             } else {
                 //add the match we found earlier
-                dictionary.add(currentBestMatch);
+                //but check if it hold the conditions
+                if (currentBestMatch.getLength() < MIN_MATCH_LENGTH ||
+                        currentBestMatch.getLength() > MAX_MATCH_LENGTH) {
+                    basicDictionaryItem basicCurrentMatch = new basicDictionaryItem(window[searchBufferSize + currentBestMatch.getLength()]);
+                    dictionary.add(basicCurrentMatch);
+                } else {
+                    dictionary.add(currentBestMatch);
+                }
+
             }
             pushNewWindowInput(window, currentBestMatch);
             return;
@@ -130,6 +138,7 @@ public class Lz77EncoderDecoder {
         //crash fix for length bigger then window size /2
         if (counter >= (windowSize - searchBufferIndex))
             return windowSize - searchBufferIndex - 1;
+        System.out.println();
         return counter;
     }
 
