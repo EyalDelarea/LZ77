@@ -1,5 +1,5 @@
-public class DictionaryItem {
-    private byte value;
+public class DictionaryItem extends basicDictionaryItem {
+
     private int matchDistance;
     private int length;
 
@@ -15,13 +15,7 @@ public class DictionaryItem {
         this.length = length;
     }
 
-    public byte getValue() {
-        return value;
-    }
 
-    public void setValue(byte value) {
-        this.value = value;
-    }
 
     public int getmatchDistance() {
         return matchDistance;

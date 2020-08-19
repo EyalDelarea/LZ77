@@ -5,9 +5,11 @@ import java.util.ArrayList;
 
 public class Lz77EncoderDecoder {
 
-    ArrayList<DictionaryItem> dictionary = new ArrayList<>();
+    private static final int MIN_MATCH_LENGTH = 3;
+    private static final int MAX_MATCH_LENGTH = 258;
+    ArrayList<basicDictionaryItem> dictionary = new ArrayList<>();
     public final int windowSize = 16;
-    public final int searchBufferSize = 8;
+    public final int searchBufferSize = 12;
     static int filePointer = 0;
     static byte[] bytesArray;
 
@@ -34,6 +36,9 @@ public class Lz77EncoderDecoder {
         //meaning index 8 is -1
         while (window[searchBufferSize] != -1);
 
+
+        System.out.println();
+
     }
 
     /**
@@ -43,26 +48,35 @@ public class Lz77EncoderDecoder {
     private void findBestMatch(Byte[] window, int index, DictionaryItem currentBestMatch) {
 
         if (index < 0) {
-            //TODO better exit
-            dictionary.add(currentBestMatch);
-            pushNewWindowInput(window,currentBestMatch);
+            if (currentBestMatch.getmatchDistance() != -1) {
+                dictionary.add(currentBestMatch);
+            }
+            pushNewWindowInput(window, currentBestMatch);
             return;
         }
         //if byte value is equal
         if (window[searchBufferSize].equals(window[index])) {
             int length = findCurrentMatchLength(window, index);
-            DictionaryItem currentMatch = new DictionaryItem(window[searchBufferSize + length].byteValue(), Math.abs(searchBufferSize - index), length);
-            //keep searching for other matches
-            index--;
-            currentBestMatch = findMaxLengthInMinDist(currentBestMatch, currentMatch);
-            findBestMatch(window, index, currentBestMatch);
+
+            if ((length < MIN_MATCH_LENGTH || length > MAX_MATCH_LENGTH) && (length==0)) {
+                basicDictionaryItem basicCurrentMatch = new basicDictionaryItem(window[searchBufferSize + length]);
+                dictionary.add(basicCurrentMatch);
+                return;
+            } else {
+                DictionaryItem currentMatch = new DictionaryItem(window[searchBufferSize + length], Math.abs(searchBufferSize - index), length);
+                //keep searching for other matches
+                index--;
+                currentBestMatch = findMaxLengthInMinDist(currentBestMatch, currentMatch);
+                findBestMatch(window, index, currentBestMatch);
+            }
+
 
             //if index is null
         } else if (window[index] == null) {
             //we discovered new char
             if (currentBestMatch.getmatchDistance() == -1) {
-                DictionaryItem item = new DictionaryItem(window[searchBufferSize].byteValue(), 0, 0);
-                dictionary.add(item);
+                basicDictionaryItem basicCurrentMatch = new basicDictionaryItem(window[searchBufferSize + currentBestMatch.getLength()]);
+                dictionary.add(basicCurrentMatch);
             } else {
                 //add the match we found earlier
                 dictionary.add(currentBestMatch);
@@ -108,15 +122,22 @@ public class Lz77EncoderDecoder {
         int temp = 0;
         index++;
         //advance two pointer until there's no match between the chars
-        while ((window[searchBufferIndex + temp].equals(window[index + temp]))
-                && (searchBufferSize + temp < window.length)) {
+        while ((searchBufferSize + temp < window.length) && (searchBufferIndex + temp < window.length)
+                && (window[searchBufferIndex + temp].equals(window[index + temp]))) {
             counter++;
             temp++;
         }
+        //crash fix for length bigger then window size /2
+        if (counter >= (windowSize - searchBufferIndex))
+            return windowSize - searchBufferIndex - 1;
         return counter;
     }
 
-
+    /**
+     * initialize window
+     *
+     * @param window byte[] array
+     */
     private void initWindow(Byte[] window) {
         for (int i = searchBufferSize; i < window.length; i++) {
             window[i] = bytesArray[filePointer];
@@ -141,6 +162,7 @@ public class Lz77EncoderDecoder {
                 break;
             }
         }
+        //loop how many jumps
         for (int jumps = 0; jumps < amountOfJumps; jumps++) {
             Byte temp = window[window.length - 1];
             if (firstIndex >= 0) {
@@ -173,6 +195,4 @@ public class Lz77EncoderDecoder {
             System.out.println(dictionary.get(0));
         }
     }
-
-
 }
