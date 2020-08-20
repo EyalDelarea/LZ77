@@ -1,6 +1,7 @@
 import java.io.*;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.BitSet;
 
 
 public class Lz77EncoderDecoder {
@@ -14,17 +15,28 @@ public class Lz77EncoderDecoder {
     public static int notNullIndex;
     private static int filePointer = 0;
     public static byte[] bytesArray;
+    public static BitSet finalOutPut;
+    private static int bitSetIndex = 0;
     ArrayList<DictionaryItem> dictionary = new ArrayList<>();
+    private int tripletBitSize;
 
     public Lz77EncoderDecoder(int searchBufferSize, int windowSize) {
         this.windowSize = windowSize;
         this.searchBufferSize = searchBufferSize;
         this.searchBufferIndex = windowSize - searchBufferSize;
         notNullIndex = searchBufferIndex;
+        //log2 for how many bits to represent the numbers +8 bits for each char.
+        tripletBitSize = (int) (log2(searchBufferSize) + (log2(searchBufferIndex)) + 8);
+        finalOutPut = new BitSet();
+
+        //encode the size of triplet in the first 8 bits of the bitSet
+        BitSet lengthBit = BitSet.valueOf(new long[]{tripletBitSize});
+        for (int i = 0; i < 8; i++) {
+            finalOutPut.set(bitSetIndex++, lengthBit.get(i));
+        }
     }
 
     public void CompressLz(String input_path) {
-
         //read all bytes from file
         File sa = new File(input_path);
         try {
@@ -45,9 +57,117 @@ public class Lz77EncoderDecoder {
         while (window[searchBufferIndex] != NOT_FOUND);
 
 
-        printDic(dictionary);
+        // printDic(dictionary);
+
+
+        String path = "C:\\Users\\eyald\\Desktop\\CompressFile";
+        //create file
+        try {
+            File compressedFile = new File(path);
+            if (compressedFile.createNewFile()) {
+                System.out.println("File created: " + compressedFile.getName());
+            } else {
+                System.out.println("File already exists.");
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        //write to file
+        try {
+            FileOutputStream fileOut =
+                    new FileOutputStream(path);
+            ObjectOutputStream out = new ObjectOutputStream(fileOut);
+            out.writeObject(finalOutPut);
+            out.close();
+            fileOut.close();
+        } catch (IOException i) {
+            i.printStackTrace();
+        }
 
     }
+
+    public void deCompress(String input_path) {
+
+
+        ArrayList<Byte> decompressed = new ArrayList<Byte>();
+        //reset our bitsetIndex to read
+        bitSetIndex = 0;
+        //Read the bitset from the file
+        String path = "C:\\Users\\eyald\\Desktop\\CompressFile";
+        BitSet set = new BitSet();
+        try {
+            FileInputStream fileIn = new FileInputStream(path);
+            ObjectInputStream in = new ObjectInputStream(fileIn);
+            set = (BitSet) in.readObject();
+            in = new ObjectInputStream(fileIn);
+            in.close();
+        } catch (IOException | ClassNotFoundException i) {
+            i.printStackTrace();
+        }
+
+
+        //first 8 bits represent the length of the triplets
+        int tripletSize = 0;
+        while (bitSetIndex < 8) {
+            if (set.get(bitSetIndex)) {
+                tripletSize += Math.pow(2, bitSetIndex);
+            }
+            bitSetIndex++;
+        }
+
+
+        while (bitSetIndex < set.length()) {
+            //decode one triplet
+            //char
+            int bValue = 0;
+            for (int i = 0; i < 8; i++) {
+                if (set.get(bitSetIndex)) {
+                    bValue += Math.pow(2, i);
+                }
+                bitSetIndex++;
+            }
+            Byte oValue = (byte) bValue;
+
+            int length = 0;
+            //length
+            for (int i = 0; i < (log2(searchBufferSize)); i++) {
+                if (set.get(bitSetIndex)) {
+                    length += Math.pow(2, i);
+                }
+                bitSetIndex++;
+            }
+            //match distance
+            int distance = 0;
+            for (int i = 0; i < (log2(searchBufferIndex)); i++) {
+                if (set.get(bitSetIndex)) {
+                    distance += Math.pow(2, i);
+                }
+                bitSetIndex++;
+            }
+            boolean isBasic = ((length > MAX_MATCH_LENGTH) || (length < MIN_MATCH_LENGTH));
+            DictionaryItem triplet = new DictionaryItem(oValue, distance, length, isBasic);
+            //parse triplet
+            if (isBasic) {
+                decompressed.add(oValue);
+            } else {
+                //run matchDistance backwards in arraylist
+                //copy amount of length
+                //write the char
+                int lastIndex =(decompressed.size()); //last element
+
+                //copy length amount of chars
+                for (int i = 0; i < length; i++) {
+                    decompressed.add(decompressed.get(lastIndex - distance));
+                    lastIndex++;
+                }
+                //insert the char
+                decompressed.add(oValue);
+            }
+        }
+
+        //TODO write to file
+    }
+
 
     /**
      * Searching for the longest match in the window , using recursion
@@ -66,10 +186,12 @@ public class Lz77EncoderDecoder {
                 DictionaryItem basic = new DictionaryItem(window[searchBufferIndex],
                         0, 0, true);
                 dictionary.add(basic);
+                encodeToBitSet(basic);
                 basicPush(window);
             } else {
                 //not basic
                 dictionary.add(currentBestMatch);
+                encodeToBitSet(currentBestMatch);
                 pushNewWindowInput(window, currentBestMatch);
             }
             return;
@@ -99,6 +221,7 @@ public class Lz77EncoderDecoder {
             if (currentBestMatch.getmatchDistance() == NOT_FOUND) {
                 DictionaryItem basicCurrentMatch = new DictionaryItem(window[searchBufferIndex], 0, 0, true);
                 dictionary.add(basicCurrentMatch);
+                encodeToBitSet(basicCurrentMatch);
                 basicPush(window);
             } else {
                 //add the match we found earlier
@@ -107,9 +230,11 @@ public class Lz77EncoderDecoder {
                 if (shortLengthObject) {
                     DictionaryItem basicCurrentMatch = new DictionaryItem(window[searchBufferIndex], 0, 0, true);
                     dictionary.add(basicCurrentMatch);
+                    encodeToBitSet(basicCurrentMatch);
                     basicPush(window);
                 } else {
                     dictionary.add(currentBestMatch);
+                    encodeToBitSet(currentBestMatch);
                     pushNewWindowInput(window, currentBestMatch);
                 }
             }
@@ -122,6 +247,36 @@ public class Lz77EncoderDecoder {
         }
 
     }
+
+    private void encodeToBitSet(DictionaryItem item) {
+
+        //encode item to bit set
+        // <char,copy,length>
+        // <8bits,log2,log2>
+
+        byte ch = item.getValue();
+        BitSet chBit = BitSet.valueOf(new byte[]{ch});
+
+        //for char
+        for (int i = 0; i < 8; i++) {
+            finalOutPut.set(bitSetIndex++, chBit.get(i));
+        }
+
+        int length = item.getLength();
+        BitSet lengthBit = BitSet.valueOf(new long[]{length});
+        //for char
+        for (int i = 0; i < log2(searchBufferSize); i++) {
+            finalOutPut.set(bitSetIndex++, lengthBit.get(i));
+        }
+
+        int copy = item.getmatchDistance();
+        BitSet copyBit = BitSet.valueOf(new long[]{copy});
+        //for char
+        for (int i = 0; i < log2(searchBufferIndex); i++) {
+            finalOutPut.set(bitSetIndex++, copyBit.get(i));
+        }
+    }
+
 
     /**
      * @param a first dictionary item
@@ -253,11 +408,17 @@ public class Lz77EncoderDecoder {
         for (int i = 0; i < dictionary.size(); i++) {
             if (!dictionary.get(i).isBasic()) {
                 System.out.print("<" + (char) (dictionary.get(i).getValue()) +
-                        "" + "," + (dictionary.get(i)).getLength() + ","
+                        "" + (dictionary.get(i)).getLength()
                         + (dictionary.get(i)).getmatchDistance() + ">");
             } else {
                 System.out.print((char) (dictionary.get(i).getValue()));
             }
         }
+    }
+
+    public static int log2(int N) {
+        // calculate log2 N indirectly
+        // using log() method
+        return (int) (Math.log(N) / Math.log(2));
     }
 }
