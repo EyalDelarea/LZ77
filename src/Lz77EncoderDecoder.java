@@ -7,11 +7,21 @@ public class Lz77EncoderDecoder {
 
     private static final int MIN_MATCH_LENGTH = 3;
     private static final int MAX_MATCH_LENGTH = 258;
-    ArrayList<basicDictionaryItem> dictionary = new ArrayList<>();
-    public final int windowSize = 16;
-    public final int searchBufferSize = 8;
-    static int filePointer = 0;
-    static byte[] bytesArray;
+    private static final int NOT_FOUND = -1;
+    public int windowSize;
+    public int searchBufferSize;
+    public static int searchBufferIndex;
+    public static int notNullIndex;
+    private static int filePointer = 0;
+    public static byte[] bytesArray;
+    ArrayList<DictionaryItem> dictionary = new ArrayList<>();
+
+    public Lz77EncoderDecoder(int searchBufferSize, int windowSize) {
+        this.windowSize = windowSize;
+        this.searchBufferSize = searchBufferSize;
+        this.searchBufferIndex = windowSize - searchBufferSize;
+        notNullIndex = searchBufferIndex;
+    }
 
     public void CompressLz(String input_path) {
 
@@ -23,18 +33,16 @@ public class Lz77EncoderDecoder {
             e.printStackTrace();
         }
 
-        Byte[] window = new Byte[windowSize];
+        //create the window
+        Byte[] window = initWindow(windowSize);
 
-        initWindow(window);
-        /**
-         * look ahead buffer condition !=null
-         */
+        // look ahead buffer condition !=null
         do {
             DictionaryItem currentBestMatch = new DictionaryItem();
-            findBestMatch(window, searchBufferSize - 1, currentBestMatch);
+            findBestMatch(window, searchBufferIndex - 1, currentBestMatch);
         }
         //meaning index 8 is -1
-        while (window[searchBufferSize] != -1);
+        while (window[searchBufferIndex] != NOT_FOUND);
 
 
         printDic(dictionary);
@@ -42,63 +50,73 @@ public class Lz77EncoderDecoder {
     }
 
     /**
-     * @param window function to find the best match for the current window values
-     *               using dynamic programming logic
+     * Searching for the longest match in the window , using recursion
+     *
+     * @param window           current window
+     * @param index            index to start look from
+     * @param currentBestMatch the current item who claims the throne.
      */
     private void findBestMatch(Byte[] window, int index, DictionaryItem currentBestMatch) {
-
+        //Stop condition - if index is below zero , meaning we went through the entire window
+        //and won't better match.
         if (index < 0) {
-            int length = currentBestMatch.getLength();
-            boolean min = length < MIN_MATCH_LENGTH;
-            boolean max = length > MAX_MATCH_LENGTH;
-
-
-            if (min || max) { //basic object
-                basicDictionaryItem basic = new basicDictionaryItem(currentBestMatch.getValue());
+            //validate length
+            if (currentBestMatch.isBasic()) {
+                //basic object
+                DictionaryItem basic = new DictionaryItem(window[searchBufferIndex],
+                        0, 0, true);
                 dictionary.add(basic);
-                //TODO push basic
-             //   pushNewWindowInput(window, basic);
-            } else { //not basic
+                basicPush(window);
+            } else {
+                //not basic
                 dictionary.add(currentBestMatch);
                 pushNewWindowInput(window, currentBestMatch);
             }
-
-
             return;
         }
-        //if byte value is equal
-        if (window[searchBufferSize].equals(window[index])) {
+
+        //Byte value is the same,we found a match
+        if (window[searchBufferIndex].equals(window[index])) {
+            //check for length
             int length = findCurrentMatchLength(window, index);
-            DictionaryItem currentMatch = new DictionaryItem(window[searchBufferSize + length], Math.abs(searchBufferSize - index), length);
-            //keep searching for other matches
+            //create new object
+            DictionaryItem currentMatch = null;
+            if (length < MIN_MATCH_LENGTH || length > MAX_MATCH_LENGTH) {
+                currentMatch = new DictionaryItem(window[searchBufferIndex], 0, 0, true);
+            } else {
+                currentMatch = new DictionaryItem(window[searchBufferIndex + length], Math.abs(searchBufferIndex - index), length, false);
+            }
+
+
+            //Continue the recursion
             index--;
             currentBestMatch = findMaxLengthInMinDist(currentBestMatch, currentMatch);
             findBestMatch(window, index, currentBestMatch);
-
-            //if index value is null
-        } else if (window[index] == null) {
-
-            if (currentBestMatch.getmatchDistance() == -1) { //we discovered new char
-                basicDictionaryItem basicCurrentMatch = new basicDictionaryItem(window[searchBufferSize + currentBestMatch.getLength()]);
+        }
+        //if index value is null
+        else if (window[index] == null) {
+            //if the distance is in it's default value
+            if (currentBestMatch.getmatchDistance() == NOT_FOUND) {
+                DictionaryItem basicCurrentMatch = new DictionaryItem(window[searchBufferIndex], 0, 0, true);
                 dictionary.add(basicCurrentMatch);
+                basicPush(window);
             } else {
                 //add the match we found earlier
                 //but check if it hold the conditions
-                if (currentBestMatch.getLength() < MIN_MATCH_LENGTH ||
-                        currentBestMatch.getLength() > MAX_MATCH_LENGTH) {
-                    basicDictionaryItem basicCurrentMatch = new basicDictionaryItem(window[searchBufferSize]);
+                boolean shortLengthObject = isShortObject(currentBestMatch);
+                if (shortLengthObject) {
+                    DictionaryItem basicCurrentMatch = new DictionaryItem(window[searchBufferIndex], 0, 0, true);
                     dictionary.add(basicCurrentMatch);
+                    basicPush(window);
                 } else {
                     dictionary.add(currentBestMatch);
+                    pushNewWindowInput(window, currentBestMatch);
                 }
-
             }
-            pushNewWindowInput(window, currentBestMatch);
             return;
-
+        } else {
             //no match found reducing index to keep search for match
             //in search buffer
-        } else {
             index--;
             findBestMatch(window, index, currentBestMatch);
         }
@@ -124,17 +142,33 @@ public class Lz77EncoderDecoder {
     }
 
     /**
+     * Function to check if a dictionary item length is valid
+     * and worth coding
+     *
+     * @param item current item
+     * @return boolean value
+     */
+    private boolean isShortObject(DictionaryItem item) {
+        //Check for length limits
+        int length = item.getLength();
+        boolean min = length < MIN_MATCH_LENGTH;
+        boolean max = length > MAX_MATCH_LENGTH;
+
+        return min || max;
+    }
+
+    /**
      * @param window the current window we will look on
      * @param index  the byte index for the current match
      * @return the matches byte sequence
      */
     private int findCurrentMatchLength(Byte[] window, int index) {
-        int searchBufferIndex = searchBufferSize + 1;
+        int searchBufferIndex = Lz77EncoderDecoder.searchBufferIndex + 1;
         int counter = 1;
         int temp = 0;
         index++;
         //advance two pointer until there's no match between the chars
-        while ((searchBufferSize + temp < window.length) && (searchBufferIndex + temp < window.length)
+        while ((Lz77EncoderDecoder.searchBufferIndex + temp < window.length) && (searchBufferIndex + temp < window.length)
                 && (window[searchBufferIndex + temp].equals(window[index + temp]))) {
             counter++;
             temp++;
@@ -149,13 +183,16 @@ public class Lz77EncoderDecoder {
     /**
      * initialize window
      *
-     * @param window byte[] array
+     * @param size byte[] array length
      */
-    private void initWindow(Byte[] window) {
-        for (int i = searchBufferSize; i < window.length; i++) {
+    private Byte[] initWindow(int size) {
+        Byte[] window = new Byte[size];
+
+        for (int i = (searchBufferIndex); i < window.length; i++) {
             window[i] = bytesArray[filePointer];
             filePointer++;
         }
+        return window;
     }
 
 
@@ -164,47 +201,60 @@ public class Lz77EncoderDecoder {
      * @param item   coded item to jump the amount of the length.
      */
     private void pushNewWindowInput(Byte[] window, DictionaryItem item) {
-//TODO fix basic window push
-        int length = item.getLength();
-        boolean min = length < MIN_MATCH_LENGTH;
-        boolean max = length > MAX_MATCH_LENGTH;
-        int firstIndex = searchBufferSize;
-        int amountOfJumps;
-
-        // finding the first not null element in window
-        for (int i = 0; i < window.length; i++) {
-            if (window[i] != null) {
-                firstIndex = i;
-                break;
-            }
-        }
-
-        if (min || max) {
-            amountOfJumps = 1;
-        }else{
-            amountOfJumps = item.getLength() + 1;
-        }
-
+        int amountOfJumps = item.getLength() + 1;
         //loop how many jumps
         for (int jumps = 0; jumps < amountOfJumps; jumps++) {
-
+            basicPush(window);
         }
     }
 
+    /**
+     * Function to push the entire window by one index
+     * And then reads a new char for the byte array of the file
+     *
+     * @param window out window
+     * @return updated firstIndex
+     */
+    public void basicPush(Byte[] window) {
 
-    public void deCompress(ArrayList<DictionaryItem> dictionary) {
-        while (!dictionary.isEmpty()) {
-            System.out.println(dictionary.get(0));
+        //push each byte
+        Byte temp = window[window.length - 1];
+        if (notNullIndex >= 0) {
+            for (int i = window.length - 1; i >= notNullIndex; i--) {
+                if (i > 0) {
+                    Byte temp2 = window[i - 1];
+                    window[i - 1] = temp;
+                    temp = temp2;
+                }
+            }
+            //read for the file new char
+            if (filePointer >= bytesArray.length) {
+                //read all file already,push -1
+                window[window.length - 1] = -1;
+            } else {
+                //push next char to window
+                window[window.length - 1] = bytesArray[filePointer];
+                filePointer++;
+            }
         }
+        //update notNullIndex
+        //if we finished with null ,update to 0;
+        if (notNullIndex <= 0) {
+            notNullIndex = 0;
+        } else {
+            --notNullIndex;
+        }
+
     }
 
-    public static void printDic(ArrayList<basicDictionaryItem> dictionary) {
+
+    public static void printDic(ArrayList<DictionaryItem> dictionary) {
         //print dictionary
         for (int i = 0; i < dictionary.size(); i++) {
-            if (dictionary.get(i) instanceof DictionaryItem) {
+            if (!dictionary.get(i).isBasic()) {
                 System.out.print("<" + (char) (dictionary.get(i).getValue()) +
-                        "" + "," + ((DictionaryItem) dictionary.get(i)).getLength() + ","
-                        + ((DictionaryItem) dictionary.get(i)).getmatchDistance() + ">");
+                        "" + "," + (dictionary.get(i)).getLength() + ","
+                        + (dictionary.get(i)).getmatchDistance() + ">");
             } else {
                 System.out.print((char) (dictionary.get(i).getValue()));
             }
