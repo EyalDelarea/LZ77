@@ -45,6 +45,11 @@ public class Lz77EncoderDecoder {
             e.printStackTrace();
         }
 
+
+        if (bytesArray.length < searchBufferSize) {
+            System.exit(1);
+        }
+
         //create the window
         Byte[] window = initWindow(windowSize);
 
@@ -55,7 +60,6 @@ public class Lz77EncoderDecoder {
         }
         //meaning index 8 is -1
         while (window[searchBufferIndex] != NOT_FOUND);
-
 
         // printDic(dictionary);
 
@@ -88,84 +92,114 @@ public class Lz77EncoderDecoder {
 
     public void deCompress(String input_path) {
 
-
-        ArrayList<Byte> decompressed = new ArrayList<Byte>();
-        //reset our bitsetIndex to read
-        bitSetIndex = 0;
-        //Read the bitset from the file
-        String path = "C:\\Users\\eyald\\Desktop\\CompressFile";
-        BitSet set = new BitSet();
+        String path = "C:\\Users\\eyald\\Desktop\\original.txt";
+        //create file
         try {
-            FileInputStream fileIn = new FileInputStream(path);
-            ObjectInputStream in = new ObjectInputStream(fileIn);
-            set = (BitSet) in.readObject();
-            in = new ObjectInputStream(fileIn);
-            in.close();
-        } catch (IOException | ClassNotFoundException i) {
+            File compressedFile = new File(path);
+            if (compressedFile.createNewFile()) {
+                System.out.println("File created: " + compressedFile.getName());
+            } else {
+                System.out.println("File already exists.");
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        //write to file
+        try {
+            FileOutputStream fileOut =
+                    new FileOutputStream(path);
+
+
+            ArrayList<Byte> decompressed = new ArrayList<Byte>();
+            //reset our bitsetIndex to read
+            bitSetIndex = 0;
+            //Read the bitset from the file
+            String patha = "C:\\Users\\eyald\\Desktop\\CompressFile";
+            BitSet set = new BitSet();
+
+            try {
+                FileInputStream fileIn = new FileInputStream(patha);
+                ObjectInputStream objectIn = new ObjectInputStream(fileIn);
+                set = (BitSet) objectIn.readObject();
+                System.out.println("The Object has been read from the file");
+                objectIn.close();
+
+            } catch (IOException | ClassNotFoundException i) {
+                i.printStackTrace();
+            }
+
+
+            //first 8 bits represent the length of the triplets
+            int tripletSize = 0;
+            while (bitSetIndex < 8) {
+                if (set.get(bitSetIndex)) {
+                    tripletSize += Math.pow(2, bitSetIndex);
+                }
+                bitSetIndex++;
+            }
+
+
+            while (bitSetIndex < set.length()) {
+                //decode one triplet
+                //char
+                int bValue = 0;
+                for (int i = 0; i < 8; i++) {
+                    if (set.get(bitSetIndex)) {
+                        bValue += Math.pow(2, i);
+                    }
+                    bitSetIndex++;
+                }
+                byte oValue = (byte) bValue;
+
+                int length = 0;
+                //length
+                for (int i = 0; i < (log2(searchBufferSize)); i++) {
+                    if (set.get(bitSetIndex)) {
+                        length += Math.pow(2, i);
+                    }
+                    bitSetIndex++;
+                }
+                //match distance
+                int distance = 0;
+                for (int i = 0; i < (log2(searchBufferIndex)); i++) {
+                    if (set.get(bitSetIndex)) {
+                        distance += Math.pow(2, i);
+                    }
+                    bitSetIndex++;
+                }
+                boolean isBasic = ((length > MAX_MATCH_LENGTH) || (length < MIN_MATCH_LENGTH));
+                DictionaryItem triplet = new DictionaryItem(oValue, distance, length, isBasic);
+                //parse triplet
+                if (isBasic) {
+                    decompressed.add(oValue);
+                    fileOut.write(oValue);
+                } else {
+                    //run matchDistance backwards in arraylist
+                    //copy amount of length
+                    //write the char
+                    int lastIndex = (decompressed.size()); //last element
+
+                    //copy length amount of chars
+                    for (int i = 0; i < length; i++) {
+                        decompressed.add(decompressed.get(lastIndex - distance));
+                        fileOut.write(decompressed.get(lastIndex - distance));
+                        lastIndex =decompressed.size();
+                    }
+                    //insert the char
+                    decompressed.add(oValue);
+                    fileOut.write(oValue);
+
+                }
+            }
+
+            fileOut.close();
+
+
+        } catch (IOException i) {
             i.printStackTrace();
         }
 
 
-        //first 8 bits represent the length of the triplets
-        int tripletSize = 0;
-        while (bitSetIndex < 8) {
-            if (set.get(bitSetIndex)) {
-                tripletSize += Math.pow(2, bitSetIndex);
-            }
-            bitSetIndex++;
-        }
-
-
-        while (bitSetIndex < set.length()) {
-            //decode one triplet
-            //char
-            int bValue = 0;
-            for (int i = 0; i < 8; i++) {
-                if (set.get(bitSetIndex)) {
-                    bValue += Math.pow(2, i);
-                }
-                bitSetIndex++;
-            }
-            Byte oValue = (byte) bValue;
-
-            int length = 0;
-            //length
-            for (int i = 0; i < (log2(searchBufferSize)); i++) {
-                if (set.get(bitSetIndex)) {
-                    length += Math.pow(2, i);
-                }
-                bitSetIndex++;
-            }
-            //match distance
-            int distance = 0;
-            for (int i = 0; i < (log2(searchBufferIndex)); i++) {
-                if (set.get(bitSetIndex)) {
-                    distance += Math.pow(2, i);
-                }
-                bitSetIndex++;
-            }
-            boolean isBasic = ((length > MAX_MATCH_LENGTH) || (length < MIN_MATCH_LENGTH));
-            DictionaryItem triplet = new DictionaryItem(oValue, distance, length, isBasic);
-            //parse triplet
-            if (isBasic) {
-                decompressed.add(oValue);
-            } else {
-                //run matchDistance backwards in arraylist
-                //copy amount of length
-                //write the char
-                int lastIndex =(decompressed.size()); //last element
-
-                //copy length amount of chars
-                for (int i = 0; i < length; i++) {
-                    decompressed.add(decompressed.get(lastIndex - distance));
-                    lastIndex++;
-                }
-                //insert the char
-                decompressed.add(oValue);
-            }
-        }
-
-        //TODO write to file
     }
 
 
@@ -343,7 +377,7 @@ public class Lz77EncoderDecoder {
     private Byte[] initWindow(int size) {
         Byte[] window = new Byte[size];
 
-        for (int i = (searchBufferIndex); i < window.length; i++) {
+        for (int i = (searchBufferIndex); (i < window.length) && (filePointer < bytesArray.length); i++) {
             window[i] = bytesArray[filePointer];
             filePointer++;
         }
@@ -408,7 +442,7 @@ public class Lz77EncoderDecoder {
         for (int i = 0; i < dictionary.size(); i++) {
             if (!dictionary.get(i).isBasic()) {
                 System.out.print("<" + (char) (dictionary.get(i).getValue()) +
-                        "" + (dictionary.get(i)).getLength()
+                        "," + (dictionary.get(i)).getLength() + ","
                         + (dictionary.get(i)).getmatchDistance() + ">");
             } else {
                 System.out.print((char) (dictionary.get(i).getValue()));
@@ -419,6 +453,6 @@ public class Lz77EncoderDecoder {
     public static int log2(int N) {
         // calculate log2 N indirectly
         // using log() method
-        return (int) (Math.log(N) / Math.log(2));
+        return ((int) (Math.log(N) / Math.log(2)))+1;
     }
 }

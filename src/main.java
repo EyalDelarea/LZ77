@@ -6,8 +6,8 @@ public class main {
         String t = "C:\\Users\\eyald\\Desktop\\smiley.bmp";
         String a
                 = "C:\\Users\\eyald\\Desktop\\lz77.txt";
-        Lz77EncoderDecoder l = new Lz77EncoderDecoder(8, 4096);
-          // l.CompressLz(a);
+        Lz77EncoderDecoder l = new Lz77EncoderDecoder(16, 2048);
+           l.CompressLz(s);
            l.deCompress(a);
 
 
