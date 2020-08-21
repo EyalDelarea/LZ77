@@ -1,3 +1,6 @@
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
 import java.util.BitSet;
 
 public class main {
@@ -6,11 +9,16 @@ public class main {
         String t = "C:\\Users\\eyald\\Desktop\\smiley.bmp";
         String a
                 = "C:\\Users\\eyald\\Desktop\\lz77.txt";
-        Lz77EncoderDecoder l = new Lz77EncoderDecoder(8, 4096);
-          // l.CompressLz(a);
-           l.deCompress(a);
+        String genesis
+                = "C:\\Users\\eyald\\Desktop\\genesis.txt";
+
+        String c
+                = "C:\\Users\\eyald\\Desktop\\CompressFile";
+        Lz77EncoderDecoder l = new Lz77EncoderDecoder(8, 2048);
+         l.CompressLz(genesis);
+          l.deCompress(c);
+
 
 
     }
-
 }
