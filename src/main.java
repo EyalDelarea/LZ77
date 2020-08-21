@@ -14,8 +14,8 @@ public class main {
 
         String c
                 = "C:\\Users\\eyald\\Desktop\\CompressFile";
-        Lz77EncoderDecoder l = new Lz77EncoderDecoder(8, 2048);
-         l.CompressLz(genesis);
+        Lz77EncoderDecoder l = new Lz77EncoderDecoder(8, 1024);
+         l.CompressLz(a);
           l.deCompress(c);
 
 

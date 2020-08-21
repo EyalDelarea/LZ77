@@ -61,6 +61,9 @@ public class Lz77EncoderDecoder {
         //meaning index 8 is -1
         while (window[searchBufferIndex] != NOT_FOUND);
 
+          // printDic(dictionary);
+
+
 
         String path = "C:\\Users\\eyald\\Desktop\\CompressFile";
         //create file
@@ -147,7 +150,7 @@ public class Lz77EncoderDecoder {
                     }
                     bitSetIndex++;
                 }
-                Byte oValue = (byte) bValue;
+                byte oValue = (byte) bValue;
 
                 int length = 0;
                 //length
@@ -171,6 +174,7 @@ public class Lz77EncoderDecoder {
                 if (isBasic) {
                     decompressed.add(oValue);
                     fileOut.write(oValue);
+
                 } else {
                     //run matchDistance backwards in arraylist
                     //copy amount of length
@@ -193,7 +197,7 @@ public class Lz77EncoderDecoder {
 
 
             for (int i = 0; i <decompressed.size(); i++) {
-                System.out.print((char)(decompressed.get(i).byteValue()));
+                System.out.print((decompressed.get(i)+","));
             }
         } catch (IOException i) {
             i.printStackTrace();
