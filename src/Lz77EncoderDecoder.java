@@ -20,13 +20,18 @@ public class Lz77EncoderDecoder {
     ArrayList<DictionaryItem> dictionary = new ArrayList<>();
     private int tripletBitSize;
 
+    /**
+     * Constructor
+     * @param searchBufferSize
+     * @param windowSize
+     */
     public Lz77EncoderDecoder(int searchBufferSize, int windowSize) {
         this.windowSize = windowSize;
         this.searchBufferSize = searchBufferSize;
         this.searchBufferIndex = windowSize - searchBufferSize;
         notNullIndex = searchBufferIndex;
         //log2 for how many bits to represent the numbers +8 bits for each char.
-        tripletBitSize = (int) (log2(searchBufferSize) + (log2(searchBufferIndex)) + 8);
+        tripletBitSize = (log2(searchBufferSize) + (log2(searchBufferIndex)) + 8);
         finalOutPut = new BitSet();
 
         //encode the size of triplet in the first 8 bits of the bitSet
@@ -36,17 +41,24 @@ public class Lz77EncoderDecoder {
         }
     }
 
-    public void CompressLz(String input_path) {
+    /**
+     *
+     * @param fileToCompress
+     */
+    public void CompressLz(String fileToCompress,String outPutPath) {
+
         //read all bytes from file
-        File sa = new File(input_path);
+        File sa = new File(fileToCompress);
         try {
             bytesArray = Files.readAllBytes(sa.toPath());
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-
+        //handling end case where the file is too short
         if (bytesArray.length < searchBufferSize) {
+            System.out.println("Your file is too short to be compress!" +
+                    "\nIt's just not worth it...");
             System.exit(1);
         }
 
@@ -61,41 +73,20 @@ public class Lz77EncoderDecoder {
         //meaning index 8 is -1
         while (window[searchBufferIndex] != NOT_FOUND);
 
-        // printDic(dictionary);
-
-
-        String path = "C:\\Users\\eyald\\Desktop\\CompressFile";
-        //create file
-        try {
-            File compressedFile = new File(path);
-            if (compressedFile.createNewFile()) {
-                System.out.println("File created: " + compressedFile.getName());
-            } else {
-                System.out.println("File already exists.");
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        //write to file
-        try {
-            FileOutputStream fileOut =
-                    new FileOutputStream(path);
-            ObjectOutputStream out = new ObjectOutputStream(fileOut);
-            out.writeObject(finalOutPut);
-            out.close();
-            fileOut.close();
-        } catch (IOException i) {
-            i.printStackTrace();
-        }
-
+        //out the compressFile
+        createFileAndWriteObject(outPutPath);
     }
 
-    public void deCompress(String input_path) {
+    /**
+     *
+     * @param compressFile
+     * @param outputDecompress
+     */
+    public void deCompress(String compressFile,String outputDecompress) {
 
-        String path = "C:\\Users\\eyald\\Desktop\\original.txt";
         //create file
         try {
-            File compressedFile = new File(path);
+            File compressedFile = new File(outputDecompress);
             if (compressedFile.createNewFile()) {
                 System.out.println("File created: " + compressedFile.getName());
             } else {
@@ -107,23 +98,19 @@ public class Lz77EncoderDecoder {
         //write to file
         try {
             FileOutputStream fileOut =
-                    new FileOutputStream(path);
-
-
+                    new FileOutputStream(outputDecompress);
             ArrayList<Byte> decompressed = new ArrayList<Byte>();
             //reset our bitsetIndex to read
             bitSetIndex = 0;
             //Read the bitset from the file
-            String patha = "C:\\Users\\eyald\\Desktop\\CompressFile";
             BitSet set = new BitSet();
 
             try {
-                FileInputStream fileIn = new FileInputStream(patha);
+                FileInputStream fileIn = new FileInputStream(compressFile);
                 ObjectInputStream objectIn = new ObjectInputStream(fileIn);
                 set = (BitSet) objectIn.readObject();
                 System.out.println("The Object has been read from the file");
                 objectIn.close();
-
             } catch (IOException | ClassNotFoundException i) {
                 i.printStackTrace();
             }
@@ -170,10 +157,7 @@ public class Lz77EncoderDecoder {
                 boolean isBasic = ((length > MAX_MATCH_LENGTH) || (length < MIN_MATCH_LENGTH));
                 DictionaryItem triplet = new DictionaryItem(oValue, distance, length, isBasic);
                 //parse triplet
-                if (isBasic) {
-                    decompressed.add(oValue);
-                    fileOut.write(oValue);
-                } else {
+                if (!isBasic) {
                     //run matchDistance backwards in arraylist
                     //copy amount of length
                     //write the char
@@ -183,28 +167,25 @@ public class Lz77EncoderDecoder {
                     for (int i = 0; i < length; i++) {
                         decompressed.add(decompressed.get(lastIndex - distance));
                         fileOut.write(decompressed.get(lastIndex - distance));
-                        lastIndex =decompressed.size();
+                        lastIndex = decompressed.size();
                     }
                     //insert the char
-                    decompressed.add(oValue);
-                    fileOut.write(oValue);
 
                 }
+                decompressed.add(oValue);
+                fileOut.write(oValue);
             }
-
             fileOut.close();
-
-
         } catch (IOException i) {
             i.printStackTrace();
         }
-
-
     }
 
 
     /**
      * Searching for the longest match in the window , using recursion
+     * Once found the best match in the file,add it to dictionary and
+     * push the window.
      *
      * @param window           current window
      * @param index            index to start look from
@@ -282,6 +263,13 @@ public class Lz77EncoderDecoder {
 
     }
 
+    /**
+     * Encode dictionary item into bitset object
+     * <Char,Length,Distance>
+     *
+     * @param item dictionary item
+     *             And writing it to the BitSet object which is static.
+     */
     private void encodeToBitSet(DictionaryItem item) {
 
         //encode item to bit set
@@ -437,22 +425,50 @@ public class Lz77EncoderDecoder {
     }
 
 
-    public static void printDic(ArrayList<DictionaryItem> dictionary) {
-        //print dictionary
-        for (int i = 0; i < dictionary.size(); i++) {
-            if (!dictionary.get(i).isBasic()) {
-                System.out.print("<" + (char) (dictionary.get(i).getValue()) +
-                        "," + (dictionary.get(i)).getLength() + ","
-                        + (dictionary.get(i)).getmatchDistance() + ">");
-            } else {
-                System.out.print((char) (dictionary.get(i).getValue()));
-            }
-        }
-    }
-
+    /**
+     * helper function to calculate log2 of N
+     *
+     * @param N number
+     * @return round up the score as int.
+     */
     public static int log2(int N) {
         // calculate log2 N indirectly
         // using log() method
-        return ((int) (Math.log(N) / Math.log(2)))+1;
+        return ((int) (Math.log(N) / Math.log(2))) + 1;
     }
+
+    /**
+     * Create a file in the @param path
+     * and writing to it @finalOutPut object which is BitSet  object
+     * @param path where to create the compress file.
+     */
+    public static void createFileAndWriteObject(String path) {
+
+        //create file
+        try {
+            File compressedFile = new File(path);
+            if (compressedFile.createNewFile()) {
+                System.out.println("File created: " + compressedFile.getName());
+            } else {
+                System.out.println("File already exists.");
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        //write to file
+        try {
+            FileOutputStream fileOut =
+                    new FileOutputStream(path);
+            ObjectOutputStream out = new ObjectOutputStream(fileOut);
+            out.writeObject(finalOutPut);
+            out.close();
+            fileOut.close();
+        } catch (IOException i) {
+            i.printStackTrace();
+        }
+
+
+    }
+
+
 }
