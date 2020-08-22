@@ -8,7 +8,7 @@ public class Lz77EncoderDecoder {
 
     private static final int MIN_MATCH_LENGTH = 3;
     private static final int MAX_MATCH_LENGTH = 258;
-    private static final int NOT_FOUND = -1;
+
     public int windowSize;
     public int searchBufferSize;
     public static int searchBufferIndex;
@@ -22,6 +22,7 @@ public class Lz77EncoderDecoder {
 
     /**
      * Constructor
+     *
      * @param searchBufferSize
      * @param windowSize
      */
@@ -42,10 +43,9 @@ public class Lz77EncoderDecoder {
     }
 
     /**
-     *
      * @param fileToCompress
      */
-    public void CompressLz(String fileToCompress,String outPutPath) {
+    public void CompressLz(String fileToCompress, String outPutPath) {
 
         //read all bytes from file
         File sa = new File(fileToCompress);
@@ -71,18 +71,17 @@ public class Lz77EncoderDecoder {
             findBestMatch(window, searchBufferIndex - 1, currentBestMatch);
         }
         //meaning index 8 is -1
-        while (window[searchBufferIndex] != NOT_FOUND);
+        while (window[searchBufferIndex] != null);
 
         //out the compressFile
         createFileAndWriteObject(outPutPath);
     }
 
     /**
-     *
      * @param compressFile
      * @param outputDecompress
      */
-    public void deCompress(String compressFile,String outputDecompress) {
+    public void deCompress(String compressFile, String outputDecompress) {
 
         //create file
         try {
@@ -221,7 +220,10 @@ public class Lz77EncoderDecoder {
             if (length < MIN_MATCH_LENGTH || length > MAX_MATCH_LENGTH) {
                 currentMatch = new DictionaryItem(window[searchBufferIndex], 0, 0, true);
             } else {
-                currentMatch = new DictionaryItem(window[searchBufferIndex + length], Math.abs(searchBufferIndex - index), length, false);
+                if (window[searchBufferIndex + length] != null) {
+                    currentMatch = new DictionaryItem(window[searchBufferIndex + length],
+                            Math.abs(searchBufferIndex - index), length, false);
+                }
             }
 
 
@@ -233,7 +235,7 @@ public class Lz77EncoderDecoder {
         //if index value is null
         else if (window[index] == null) {
             //if the distance is in it's default value
-            if (currentBestMatch.getmatchDistance() == NOT_FOUND) {
+            if (currentBestMatch.getmatchDistance() == -1) {
                 DictionaryItem basicCurrentMatch = new DictionaryItem(window[searchBufferIndex], 0, 0, true);
                 dictionary.add(basicCurrentMatch);
                 encodeToBitSet(basicCurrentMatch);
@@ -306,6 +308,14 @@ public class Lz77EncoderDecoder {
      * @return the item with the highest length in minimum match distance
      */
     private DictionaryItem findMaxLengthInMinDist(DictionaryItem a, DictionaryItem b) {
+        if (a == null) {
+            if (b != null)
+                return b;
+        }
+        if (b == null) {
+            if (a != null)
+                return a;
+        }
         if (a.getLength() > b.getLength())
             return a;
         else if (b.getLength() > a.getLength())
@@ -345,8 +355,9 @@ public class Lz77EncoderDecoder {
         int temp = 0;
         index++;
         //advance two pointer until there's no match between the chars
-        while ((Lz77EncoderDecoder.searchBufferIndex + temp < window.length) && (searchBufferIndex + temp < window.length)
-                && (window[searchBufferIndex + temp].equals(window[index + temp]))) {
+        while ((searchBufferIndex + temp < window.length) && (searchBufferSize + temp < window.length)
+                && (window[searchBufferIndex + temp] != null) && (window[searchBufferSize + temp] != null) &&
+                (window[searchBufferIndex + temp].equals(window[index + temp]))) {
             counter++;
             temp++;
         }
@@ -407,7 +418,7 @@ public class Lz77EncoderDecoder {
             //read for the file new char
             if (filePointer >= bytesArray.length) {
                 //read all file already,push -1
-                window[window.length - 1] = -1;
+                window[window.length - 1] = null;
             } else {
                 //push next char to window
                 window[window.length - 1] = bytesArray[filePointer];
@@ -440,6 +451,7 @@ public class Lz77EncoderDecoder {
     /**
      * Create a file in the @param path
      * and writing to it @finalOutPut object which is BitSet  object
+     *
      * @param path where to create the compress file.
      */
     public static void createFileAndWriteObject(String path) {
